@@ -1,0 +1,57 @@
+"""
+AnimaCell — Avatar & VTuber expression coordinator.
+
+Receives emotion signals from EmotionCell and drives:
+  - The canvas avatar in index.html (via /anima/express)
+  - VTube Studio parameters (via the VTS bridge)
+  - Live2D Lotes Eve expressions
+
+This cell is the bridge between Eve's inner emotional state
+and her outward visual representation.
+"""
+
+import asyncio
+import logging
+import requests as _req
+
+from brain.base_cell import BaseCell, CellContext, CellStatus
+
+logger = logging.getLogger(__name__)
+
+EVE_URL = "http://127.0.0.1:8870"
+
+
+class AnimaCell(BaseCell):
+    name        = "anima"
+    description = "ANIMA Engine — avatar expressions & VTuber drive"
+    color       = "#f59e0b"
+    lazy        = True
+    position    = (1, 0)
+
+    def __init__(self):
+        super().__init__()
+        self._last_expression = "neutral"
+
+    async def process(self, ctx: CellContext) -> str:
+        """Push the current emotion to the avatar expression system."""
+        emotion = ctx.emotion_state or "neutral"
+        if emotion == self._last_expression:
+            return emotion   # no change needed
+
+        try:
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: _req.post(
+                    f"{EVE_URL}/anima/express",
+                    json={"expression": emotion},
+                    timeout=1.0,
+                )
+            )
+            self._last_expression = emotion
+        except Exception:
+            pass   # avatar sync is best-effort
+        return emotion
+
+    def health(self) -> dict:
+        return {"last_expression": self._last_expression}
